@@ -77,18 +77,18 @@ func conectarConMaster(ipsWorkers []string, miIp int, finPrograma chan bool) {
 func main() {
 	args := os.Args
 	if len(args) != 5 {
-		log.Println("Error: endpoint missing: go run server.go ficheroIpsInterno miLineaIp ficheroBarrera miLineaBarrera")
+		log.Println("Error: endpoint missing: go run server.go ficheroIpsInterno ficheroBarrera miLineaIp")
 		os.Exit(1)
 	}
-	fileBarrier := os.Args[3]
-	lineBarrier, err := strconv.Atoi(os.Args[4])
+	fileBarrier := os.Args[2]
+	lineBarrier, err := strconv.Atoi(os.Args[3])
 	connBarrierChan := make(chan net.Conn)
 	barrierListener, ipsBarrera, err := com.InicializarVariablesBarrera(fileBarrier, lineBarrier)
 	com.CheckError(err)
 	go com.EscucharPuertoBarrera(barrierListener, connBarrierChan)
 	log.Println("Activado puerto barrera")
 	fileWorkers := os.Args[1]
-	lineWorker, err := strconv.Atoi(os.Args[2])
+	lineWorker, err := strconv.Atoi(os.Args[3])
 	var workersIP []string
 	workersIP, err = com.GetEndpoints(fileWorkers, lineWorker)
 	log.Println("Tengo mi IP DE WORKER")

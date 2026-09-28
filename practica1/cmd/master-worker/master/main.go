@@ -113,19 +113,19 @@ func enviarFinWorkers(misWorkers []net.Conn) {
 func main() {
 	args := os.Args
 	if len(args) != 6 {
-		log.Println("Error: endpoint missing: go run server.go ip:port(Clientes) ficheroIpsInterno miLineaIp ficheroBarrera miLineaBarrera")
+		log.Println("Error: endpoint missing: go run server.go ip:port(Clientes) ficheroIpsInterno ficheroBarrera miLineaIp")
 		os.Exit(1)
 	}
 
-	fileBarrier := os.Args[4]
-	lineBarrier, err := strconv.Atoi(os.Args[5])
+	fileBarrier := os.Args[3]
+	lineBarrier, err := strconv.Atoi(os.Args[4])
 	connBarrierChan := make(chan net.Conn)
 	barrierListener, ipsBarrera, err := com.InicializarVariablesBarrera(fileBarrier, lineBarrier)
 	com.CheckError(err)
 	go com.EscucharPuertoBarrera(barrierListener, connBarrierChan)
 	log.Println("Activado puerto barrera")
 	fileWorkers := os.Args[2]
-	lineMaster, err := strconv.Atoi(os.Args[3])
+	lineMaster, err := strconv.Atoi(os.Args[4])
 	clientPort := os.Args[1]
 	var workersIP []string
 	workersIP, err = com.GetEndpoints(fileWorkers, lineMaster)

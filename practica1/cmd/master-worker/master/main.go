@@ -112,7 +112,7 @@ func enviarFinWorkers(misWorkers []net.Conn) {
 
 func main() {
 	args := os.Args
-	if len(args) != 6 {
+	if len(args) != 5 {
 		log.Println("Error: endpoint missing: go run server.go ip:port(Clientes) ficheroIpsInterno ficheroBarrera miLineaIp")
 		os.Exit(1)
 	}

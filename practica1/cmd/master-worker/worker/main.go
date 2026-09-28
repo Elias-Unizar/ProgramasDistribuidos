@@ -76,7 +76,7 @@ func conectarConMaster(ipsWorkers []string, miIp int, finPrograma chan bool) {
 
 func main() {
 	args := os.Args
-	if len(args) != 5 {
+	if len(args) != 4 {
 		log.Println("Error: endpoint missing: go run server.go ficheroIpsInterno ficheroBarrera miLineaIp")
 		os.Exit(1)
 	}

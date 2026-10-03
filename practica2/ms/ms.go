@@ -45,6 +45,7 @@ func parsePeers(path string) (lines []string) {
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
+	checkError(scanner.Err())
 	return lines
 }
 

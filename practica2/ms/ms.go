@@ -12,6 +12,7 @@ import (
 	"bufio"
 	"encoding/gob"
 	"fmt"
+	"log"
 	"net"
 	"os"
 )
@@ -68,6 +69,14 @@ func (ms *MessageSystem) Receive() (msg Message) {
 	return msg
 }
 
+func (ms *MessageSystem) GetTotalPeers() int {
+	return len(ms.peers)
+}
+
+func (ms *MessageSystem) WhoAmI() int {
+	return ms.me
+}
+
 //	messageTypes es un slice con tipos de mensajes que los procesos se pueden intercambiar a través de este ms
 //
 // Hay que registrar un mensaje antes de poder utilizar (enviar o recibir)
@@ -96,6 +105,7 @@ func New(whoIam int, usersFile string, messageTypes []Message) (ms MessageSystem
 		for {
 			select {
 			case <-ms.done:
+				log.Printf("El modelo actor FINALIZO CORRECTAMENTE")
 				return
 			default:
 				conn, err := listener.Accept()

@@ -1,0 +1,23 @@
+2026/10/15 23:16:20 Soy P4, y he leido: "P2 linea 1\n"
+2026/10/15 23:16:20 Soy P4, y he leido: ""
+2026/10/15 23:16:21 Soy P4, y he leido: "P3 linea 1\nP1 linea 1\nP2 linea 2\n"
+2026/10/15 23:16:21 Soy P4, y he leido: "P1 linea 2\n"
+2026/10/15 23:16:22 Soy P4, y he leido: "P3 linea 2\nP3 linea 3\n"
+2026/10/15 23:16:22 Soy P4, y he leido: "P2 linea 3\nP3 linea 4\nP2 linea 4\nP1 linea 3\n"
+2026/10/15 23:16:22 Soy P4, y he leido: ""
+2026/10/15 23:16:22 Soy P4, y he leido: "P1 linea 4\n"
+2026/10/15 23:16:23 Soy P4, y he leido: "P3 linea 5\nP2 linea 5\n"
+2026/10/15 23:16:23 Soy P4, y he leido: "P1 linea 5\n"
+2026/10/15 23:16:24 Soy P4, y he leido: ""
+2026/10/15 23:16:24 Soy P4, y he leido: ""
+2026/10/15 23:16:24 Soy P4, y he leido: ""
+2026/10/15 23:16:25 Soy P4, y he leido: ""
+2026/10/15 23:16:25 Soy P4, y he leido: ""
+2026/10/15 23:16:25 Soy P4, y he leido: ""
+2026/10/15 23:16:25 Soy P4, y he leido: ""
+2026/10/15 23:16:26 Soy P4, y he leido: ""
+2026/10/15 23:16:26 Soy P4, y he leido: ""
+2026/10/15 23:16:26 Soy P4, y he leido: ""
+2026/10/15 23:16:27 Se cierra el listener del RicarAgrawala
+2026/10/15 23:16:27 El modelo actor FINALIZO CORRECTAMENTE
+2026/10/15 23:16:27 Cerramos el messageBoxListener

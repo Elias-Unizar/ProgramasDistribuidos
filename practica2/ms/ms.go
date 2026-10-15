@@ -77,6 +77,10 @@ func (ms *MessageSystem) WhoAmI() int {
 	return ms.me
 }
 
+func (ms *MessageSystem) GetPeers() []string {
+	return ms.peers
+}
+
 //	messageTypes es un slice con tipos de mensajes que los procesos se pueden intercambiar a través de este ms
 //
 // Hay que registrar un mensaje antes de poder utilizar (enviar o recibir)

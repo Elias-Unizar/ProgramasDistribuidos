@@ -1,6 +1,7 @@
 package ra
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 // Necesita ./users.txt con n lineas IP:puerto (aqui n = 3).
 // Para emular el hecho de que los procesos distribuidos existen, usando unicamente un unico proceso(el que realiza los test claro)
 // Se usan vectores, cada componente
-const n = 3 //numero de procesos concurrente a simular
+const n = 6 //numero de procesos concurrente a simular
 
 var sistemas [n]ms.MessageSystem //cada proceso tiene que tener su propio actor, y probaremos diferentes RA para los mismos procesos
 var recvChannels [n]chan ms.Message
@@ -31,13 +32,6 @@ func iniciarMSs() {
 	msIniciados = true
 }
 
-func finalizarMSs(sistemas []ms.MessageSystem) {
-	for _, mss := range sistemas {
-		mss.Stop()
-	}
-	msIniciados = false
-}
-
 func crearRA(matriz [][]bool) []*RASharedDB {
 	ras := make([]*RASharedDB, n)
 	for i := range ras {
@@ -47,8 +41,8 @@ func crearRA(matriz [][]bool) []*RASharedDB {
 }
 
 func finalizarRA(ras []*RASharedDB) {
-	for _, ra := range ras {
-		ra.Stop()
+	for i := range ras {
+		ras[i].Stop()
 	}
 }
 
@@ -92,9 +86,9 @@ func TestTodoExcluyente(t *testing.T) {
 		iniciarMSs()
 	}
 	ras := crearRA([][]bool{{true, true}, {true, true}})
-	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 1})
+	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1})
 	if simultaneos != 1 {
-		t.Errorf("hubo %d procesos a la vez en la SC; se esperaba 1", simultaneos)
+		t.Errorf("hubo %d procesos a la vez en la SC; se esperaba 1 solo", simultaneos)
 	}
 	finalizarRA(ras)
 }
@@ -105,9 +99,9 @@ func TestNadaExcluyente(t *testing.T) {
 		iniciarMSs()
 	}
 	ras := crearRA([][]bool{{false, false}, {false, false}})
-	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 1})
-	if simultaneos < 2 {
-		t.Errorf("hubo %d procesos a la vez en la SC; se esperaba al menos 2", simultaneos)
+	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1})
+	if simultaneos < n/2 { //n/2 para permitir que alguno acabe rapido, pero al menos la mitad deben estar a la vez
+		t.Errorf("hubo %d procesos a la vez en la SC; se esperaba al menos %d", simultaneos, n/2)
 	}
 	finalizarRA(ras)
 }
@@ -117,10 +111,13 @@ func TestMismaAccionExcluyeDistintaNo(t *testing.T) {
 	if !msIniciados {
 		iniciarMSs()
 	}
-	ras := crearRA([][]bool{{true, false}, {false, false}})
-	simultaneos, porAccion := simularComportamiento(ras, []TipoSC{0, 0, 1})
+	ras := crearRA([][]bool{{true, false}, {false, true}})
+	simultaneos, porAccion := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1})
 	if porAccion[0] != 1 {
 		t.Errorf("%d procesos de la accion 0 a la vez; se esperaba 1", porAccion[0])
+	}
+	if porAccion[1] != 1 {
+		t.Errorf("%d procesos de la accion 1 a la vez; se esperaba 1", porAccion[1])
 	}
 	if simultaneos < 2 {
 		t.Errorf("la accion 1 deberia solaparse con la 0, pero simultaneos = %d", simultaneos)
@@ -129,12 +126,10 @@ func TestMismaAccionExcluyeDistintaNo(t *testing.T) {
 }
 
 // Ejecutar test main, usar siempre este, que crea los MS
-func TestEjecutarTodos(t *testing.T) {
+func TestMain(t *testing.M) {
 	if !msIniciados {
 		iniciarMSs()
 	}
-	TestMismaAccionExcluyeDistintaNo(t)
-	TestNadaExcluyente(t)
-	TestTodoExcluyente(t)
-	finalizarMSs(sistemas[:])
+	code := t.Run()
+	os.Exit(code)
 }

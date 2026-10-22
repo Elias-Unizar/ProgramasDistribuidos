@@ -27,9 +27,12 @@ type FileSyncReq struct {
 type FileSyncDone struct{}
 
 func truncarFichero(fichero string) {
-	if err := os.Truncate(fichero, 0); err != nil {
-		log.Println("Error truncando", fichero, ":", err)
+	f, err := os.OpenFile(fichero, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Println("Error truncando/creando", fichero, ":", err)
+		return
 	}
+	f.Close()
 }
 
 func escribirEnFichero(fichero string, nuevoContenido string) bool {
@@ -150,9 +153,10 @@ func bucleEscritor(miRa *ra.RASharedDB, msSys *ms.MessageSystem, fichero string,
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 	syncEnded := make(chan bool)
 	s := time.Duration(rand.Int63n(1500))
-	time.Sleep(s * time.Millisecond)
+	time.Sleep(s * time.Second)
 	ficheroCompartido, msgSys, miRa, miBarrera := iniciarSistema(syncEnded)
 	miBarrera.ActivarBarrera_ProcesosSinEncender()
 	s = time.Duration(rand.Int63n(500))

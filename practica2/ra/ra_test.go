@@ -12,7 +12,7 @@ import (
 // Necesita ./users.txt con n lineas IP:puerto (aqui n = 3).
 // Para emular el hecho de que los procesos distribuidos existen, usando unicamente un unico proceso(el que realiza los test claro)
 // Se usan vectores, cada componente
-const n = 6 //numero de procesos concurrente a simular
+const n = 24 //numero de procesos concurrente a simular
 
 var sistemas [n]ms.MessageSystem //cada proceso tiene que tener su propio actor, y probaremos diferentes RA para los mismos procesos
 var recvChannels [n]chan ms.Message
@@ -121,6 +121,24 @@ func TestMismaAccionExcluyeDistintaNo(t *testing.T) {
 	}
 	if simultaneos < 2 {
 		t.Errorf("la accion 1 deberia solaparse con la 0, pero simultaneos = %d", simultaneos)
+	}
+	finalizarRA(ras)
+}
+
+func TestMEGABOOOOOOOMBASTIC(t *testing.T) {
+	if !msIniciados {
+		iniciarMSs()
+	}
+	ras := crearRA([][]bool{{true, true}, {true, false}})
+	simultaneos, porAccion := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1})
+	if porAccion[0] != 1 {
+		t.Errorf("%d procesos de la accion 0 a la vez; se esperaba 1", porAccion[0])
+	}
+	if porAccion[1] != simultaneos {
+		t.Errorf("%d procesos de la accion 1 a la vez, deberian ser todos los simultaneos: %d;", porAccion[1], simultaneos)
+	}
+	if simultaneos < 3 {
+		t.Errorf("Deberia haber simultaneos = %d", simultaneos)
 	}
 	finalizarRA(ras)
 }

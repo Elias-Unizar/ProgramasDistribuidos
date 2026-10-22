@@ -33,7 +33,6 @@ type Barrier struct {
 func handleBarrierMS(miB *Barrier, msgArrived BarrierArrived) {
 	miB.mutex.Lock()
 	miB.recievedMsg[strconv.Itoa(msgArrived.Pid)] = true
-	fmt.Println("Received ", len(miB.recievedMsg), " elements")
 	if len(miB.recievedMsg) == miB.totalPeer-1 {
 		miB.recievedMsg = map[string]bool{}
 		miB.waitChan <- true

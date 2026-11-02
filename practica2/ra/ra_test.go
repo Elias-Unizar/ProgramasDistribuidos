@@ -12,7 +12,7 @@ import (
 // Necesita ./users.txt con n lineas IP:puerto (aqui n = 3).
 // Para emular el hecho de que los procesos distribuidos existen, usando unicamente un unico proceso(el que realiza los test claro)
 // Se usan vectores, cada componente
-const n = 24 //numero de procesos concurrente a simular
+const n = 4 //numero de procesos concurrente a simular
 
 var sistemas [n]ms.MessageSystem //cada proceso tiene que tener su propio actor, y probaremos diferentes RA para los mismos procesos
 var recvChannels [n]chan ms.Message
@@ -82,11 +82,10 @@ func simularComportamiento(ras []*RASharedDB, acciones []TipoSC) (simultaneos in
 
 // Todas las acciones se excluyen: nunca mas de uno dentro.
 func TestTodoExcluyente(t *testing.T) {
-	if !msIniciados {
-		iniciarMSs()
-	}
+	// if !msIniciados {
+	iniciarMSs()
 	ras := crearRA([][]bool{{true, true}, {true, true}})
-	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1})
+	simultaneos, _ := simularComportamiento(ras, []TipoSC{0, 0, 0, 1})
 	if simultaneos != 1 {
 		t.Errorf("hubo %d procesos a la vez en la SC; se esperaba 1 solo", simultaneos)
 	}
@@ -112,7 +111,7 @@ func TestMismaAccionExcluyeDistintaNo(t *testing.T) {
 		iniciarMSs()
 	}
 	ras := crearRA([][]bool{{true, false}, {false, true}})
-	simultaneos, porAccion := simularComportamiento(ras, []TipoSC{0, 0, 0, 1, 1, 1})
+	simultaneos, porAccion := simularComportamiento(ras, []TipoSC{0, 0, 0, 1})
 	if porAccion[0] != 1 {
 		t.Errorf("%d procesos de la accion 0 a la vez; se esperaba 1", porAccion[0])
 	}

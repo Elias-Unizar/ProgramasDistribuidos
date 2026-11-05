@@ -125,10 +125,13 @@ func ExecMutipleHosts(cmd string,
 	privKeyFile string) {
 
 	//results := make(chan string, 1000)
-
 	//Read private key file for user
+
+	// pkey, err := os.ReadFile(
+	// 	filepath.Join(os.Getenv("USERPROFILE"), ".ssh", privKeyFile))
+	home, _ := os.UserHomeDir()
 	pkey, err := os.ReadFile(
-		filepath.Join(os.Getenv("HOME"), ".ssh", privKeyFile))
+		filepath.Join(home, ".ssh", privKeyFile))
 
 	//fmt.Println("PrivKey: ", string(pkey))
 

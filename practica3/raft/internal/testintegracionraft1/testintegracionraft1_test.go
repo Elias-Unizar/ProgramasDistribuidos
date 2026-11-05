@@ -19,14 +19,22 @@ import (
 
 const (
 	//hosts
-	MAQUINA1 = "127.0.0.1"
-	MAQUINA2 = "127.0.0.1"
-	MAQUINA3 = "127.0.0.1"
+	// MAQUINA1 = "127.0.0.1"
+	// MAQUINA2 = "127.0.0.1"
+	// MAQUINA3 = "127.0.0.1"
+
+	// PUERTOREPLICA1 = "29151"
+	// PUERTOREPLICA2 = "29152"
+	// PUERTOREPLICA3 = "29153"
+	// hosts
+	MAQUINA1 = "192.168.3.1"
+	MAQUINA2 = "192.168.3.2"
+	MAQUINA3 = "192.168.3.3"
 
 	//puertos
-	PUERTOREPLICA1 = "29001"
-	PUERTOREPLICA2 = "29002"
-	PUERTOREPLICA3 = "29003"
+	PUERTOREPLICA1 = "29151"
+	PUERTOREPLICA2 = "29152"
+	PUERTOREPLICA3 = "29153"
 
 	//nodos replicas
 	REPLICA1 = MAQUINA1 + ":" + PUERTOREPLICA1
@@ -46,7 +54,7 @@ const (
 )
 
 // PATH de los ejecutables de modulo golang de servicio Raft
-var PATH string = filepath.Join(os.Getenv("HOME"), "tmp", "p3", "raft")
+var PATH string = filepath.Join(os.Getenv("HOME"), "sd", "practica3", "raft")
 
 // go run cmd/srvraft/main.go 0 127.0.0.1:29001 127.0.0.1:29002 127.0.0.1:29003
 var EXECREPLICACMD string = "cd " + PATH + "; go run " + EXECREPLICA
@@ -184,7 +192,7 @@ func (cfg *configDespliegue) soloArranqueYparadaTest1(t *testing.T) {
 
 // Primer lider en marcha - 3 NODOS RAFT
 func (cfg *configDespliegue) elegirPrimerLiderTest2(t *testing.T) {
-	t.Skip("SKIPPED ElegirPrimerLiderTest2")
+	//t.Skip("SKIPPED ElegirPrimerLiderTest2")
 
 	fmt.Println(t.Name(), ".....................")
 
@@ -202,7 +210,7 @@ func (cfg *configDespliegue) elegirPrimerLiderTest2(t *testing.T) {
 
 // Fallo de un primer lider y reeleccion de uno nuevo - 3 NODOS RAFT
 func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
-	t.Skip("SKIPPED FalloAnteriorElegirNuevoLiderTest3")
+	//t.Skip("SKIPPED FalloAnteriorElegirNuevoLiderTest3")
 
 	fmt.Println(t.Name(), ".....................")
 
@@ -212,7 +220,7 @@ func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
 	cfg.pruebaUnLider(3)
 
 	// Desconectar lider
-	// ???
+	cfg.desconectarLider(3)
 
 	fmt.Printf("Comprobar nuevo lider\n")
 	cfg.pruebaUnLider(3)
@@ -225,8 +233,15 @@ func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
 
 // 3 operaciones comprometidas con situacion estable y sin fallos - 3 NODOS RAFT
 func (cfg *configDespliegue) tresOperacionesComprometidasEstable(t *testing.T) {
-	t.Skip("SKIPPED tresOperacionesComprometidasEstable")
+	//t.Skip("SKIPPED tresOperacionesComprometidasEstable")
 
+	fmt.Println(t.Name(), ".....................")
+
+	cfg.startDistributedProcesses()
+
+	fmt.Printf("Lider inicial\n")
+	liderAct := cfg.pruebaUnLider(3)
+	cfg.someterNuevaOperacion(raft.TipoOperacion{}, liderAct, 3, "")
 	// A completar ???
 }
 
@@ -315,6 +330,22 @@ func (cfg *configDespliegue) pruebaUnLider(numreplicas int) int {
 	return -1 // Termina
 }
 
+func (cfg *configDespliegue) desconectarLider(numreplicas int) {
+	var nodoLider int
+	for i := 0; i < numreplicas; i++ {
+		var esLider bool
+		nodoLider, _, esLider, _ = cfg.obtenerEstadoRemoto(i)
+		if esLider {
+			break
+		}
+	}
+	var reply raft.Vacio
+	err := cfg.nodosRaft[nodoLider].CallTimeout("NodoRaft.ParaNodo",
+		raft.Vacio{}, &reply, 10*time.Millisecond)
+	check.CheckError(err, "Error en llamada RPC ParaNodo")
+	cfg.conectados[nodoLider] = false
+}
+
 func (cfg *configDespliegue) obtenerEstadoRemoto(
 	indiceNodo int) (int, int, bool, int) {
 	var reply raft.EstadoRemoto
@@ -323,6 +354,24 @@ func (cfg *configDespliegue) obtenerEstadoRemoto(
 	check.CheckError(err, "Error en llamada RPC ObtenerEstadoRemoto")
 
 	return reply.IdNodo, reply.Mandato, reply.EsLider, reply.IdLider
+}
+
+func (cfg *configDespliegue) someterNuevaOperacion(op raft.TipoOperacion,
+	lider int, numreplicas int, resultadoEsperado string) {
+	var reply raft.ResultadoRemoto
+	for !reply.EsLider && numreplicas > 0 {
+		err := cfg.nodosRaft[lider].CallTimeout("NodoRaft.SometerOperacionRaft",
+			op, &reply, 10*time.Millisecond)
+		check.CheckError(err, "Error en llamada RPC SometerOperacionRaft")
+		lider = reply.IdLider
+		numreplicas -= 1
+	}
+	if !reply.EsLider || reply.ValorADevolver != resultadoEsperado {
+		cfg.t.Fatalf("Operacion %v ha devuelto: %s en un indice de registro %d\n",
+			"He podido contactar con el lider: esLider=%v  en subtest %s",
+			op, reply.ValorADevolver, reply.IndiceRegistro,
+			reply.EsLider, cfg.t.Name())
+	}
 }
 
 // start  gestor de vistas; mapa de replicas y maquinas donde ubicarlos;
@@ -341,16 +390,18 @@ func (cfg *configDespliegue) startDistributedProcesses() {
 	}
 
 	// aproximadamente 500 ms para cada arranque por ssh en portatil
-	time.Sleep(2000 * time.Millisecond)
+	time.Sleep(4100 * time.Millisecond) //Por los prints, hay una diferencia de casi 10-40ms y el sleep de dentro de los nodos
 }
 
 func (cfg *configDespliegue) stopDistributedProcesses() {
 	var reply raft.Vacio
 
-	for _, endPoint := range cfg.nodosRaft {
-		err := endPoint.CallTimeout("NodoRaft.ParaNodo",
-			raft.Vacio{}, &reply, 10*time.Millisecond)
-		check.CheckError(err, "Error en llamada RPC Para nodo")
+	for i, endPoint := range cfg.nodosRaft {
+		if cfg.conectados[i] {
+			err := endPoint.CallTimeout("NodoRaft.ParaNodo",
+				raft.Vacio{}, &reply, 10*time.Millisecond)
+			check.CheckError(err, "Error en llamada RPC Para nodo")
+		}
 	}
 }
 

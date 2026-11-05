@@ -93,6 +93,11 @@ type AplicaOperacion struct {
 	Operacion TipoOperacion
 }
 
+type OperacionAplicada struct {
+	CanalAsignado int
+	Valor         string
+}
+
 const (
 	SEGUIDOR  = "Seguidor"
 	CANDIDATO = "Candidato"
@@ -104,6 +109,7 @@ type datosMaquinaEstados struct {
 	//El timer para poder esperar un timeout
 	tmrOut *time.Timer
 	//Canales para salir de la espera en la maquina de estados
+	//El HayLider sirve, para enviar al idLider, si sabemos quien es con seguridad
 	candidatoHayLider chan bool
 	candidatoSoyLider chan bool
 }
@@ -127,7 +133,7 @@ type NodoRaft struct {
 	Logger *log.Logger
 
 	CanalAplicarOperacion chan AplicaOperacion
-	CanalRecibirResultado chan string
+	CanalRecibirResultado chan OperacionAplicada
 	//Si se ha votado a alguien en el mandato actual tiene
 	//su id, si no tendra el valor de IntNOINICIALIZADO
 	CandidatoVotado int
@@ -142,18 +148,13 @@ type NodoRaft struct {
 	// Datos que usará el nodo en caso de que se vuelva lider
 	// Contiene información de todos los nodos de la red(de los que pueda tener)
 	infoSeg infoSeguidores
+
+	mapaClaveValor map[string]string
 }
 
 func timerRand(tiempoBase int64, rangoRand int64) time.Duration {
 	randInc, _ := rand.Int(rand.Reader, big.NewInt(rangoRand))
 	return time.Duration(tiempoBase+randInc.Int64()) * time.Millisecond
-}
-
-func reiniciarCanales(nr *NodoRaft) {
-	nr.Mux.Lock()
-	nr.misDatosEstado.candidatoHayLider = make(chan bool, 1)
-	nr.misDatosEstado.candidatoSoyLider = make(chan bool, 1)
-	nr.Mux.Unlock()
 }
 
 func reiniciarTimer(t *time.Timer, d time.Duration) {
@@ -180,7 +181,6 @@ func enviarLatidosVacios(nr *NodoRaft) {
 
 // Envia el primer latido vacio,
 func inicializarLider(nr *NodoRaft) {
-	reiniciarCanales(nr)
 	nr.Mux.Lock()
 	nr.IdLider = nr.Yo
 	nr.misDatosEstado.miEstado = LIDER
@@ -219,6 +219,54 @@ func comprobarNuevoCompr(nr *NodoRaft) {
 	}
 }
 
+func simularServer(nr *NodoRaft) {
+	memoria := make(map[string]string)
+	for operacion := range nr.CanalAplicarOperacion {
+		var valor string
+		nr.Logger.Printf("Soy %d y hay una nueva operacion a ejecutar:\n"+
+			"%v", nr.Yo, operacion.Operacion)
+		if operacion.Operacion.Operacion == "leer" {
+			valor = memoria[operacion.Operacion.Clave]
+		} else if operacion.Operacion.Operacion == "escribir" {
+			memoria[operacion.Operacion.Clave] = operacion.Operacion.Valor
+			valor = operacion.Operacion.Valor
+		} else {
+			nr.Logger.Printf("OPERACION ERRONEA")
+		}
+		if nr.misDatosEstado.miEstado == LIDER {
+			nr.CanalRecibirResultado <- OperacionAplicada{0, valor}
+		}
+	}
+
+}
+func (nr *NodoRaft) aplicarEntradasComprometidas() {
+	operacionesParaAplicar := make([]EntradaRegistro, 0)
+	nr.CanalRecibirResultado = make(chan OperacionAplicada)
+	go simularServer(nr)
+	for {
+		nr.Mux.Lock()
+		if nr.UltimoAplicado < nr.UltimoComprometido {
+			operacionesParaAplicar =
+				(nr.RegistroOperaciones[nr.UltimoAplicado+1 : nr.UltimoComprometido+1])
+		}
+		nr.Mux.Unlock()
+		//Asi no abusamos del mutex, de todas formas las operaciones deben de
+		//ser secuenciales
+		for _, entrada := range operacionesParaAplicar {
+			nr.Logger.Printf("Voy a enviar una operacion para aplicar: %d", nr.Yo)
+			nr.CanalAplicarOperacion <- AplicaOperacion{
+				Indice: nr.UltimoAplicado, Operacion: entrada.Operacion}
+			//Se podria recoger aqui la operacion, y tener como un mapa de canales
+			//Para enviar al cliente que realmente solicito esa operacion
+			//El mapa se podria acceder con modulo, aunque habria una probabilidad
+			//de choque si el modulo es demasiado pequeño
+			nr.UltimoAplicado += 1
+		}
+		operacionesParaAplicar = make([]EntradaRegistro, 0)
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
 func tareasLider(finLider chan bool, nr *NodoRaft) {
 	for {
 		select {
@@ -253,7 +301,6 @@ func (nr *NodoRaft) accionesSeguidor() {
 
 func (nr *NodoRaft) accionesCandidato() {
 	tiempoLimite := time.NewTimer(TIMEOUT_GLOBAL_MS * time.Millisecond)
-	reiniciarCanales(nr)
 	nr.Logger.Printf("Y si adelanto las elecciones generales?: %d", nr.Yo)
 	go iniciarProcesoEleccion(nr)
 	for {
@@ -269,10 +316,7 @@ func (nr *NodoRaft) accionesCandidato() {
 			go iniciarProcesoEleccion(nr)
 		case <-nr.misDatosEstado.candidatoHayLider:
 			nr.Logger.Printf("No gane la eleccion, hay otro lider: %d", nr.Yo)
-			//Cambiar a seguidor, el canal se activa desde AppendEntries
-			nr.Mux.Lock()
-			nr.misDatosEstado.miEstado = SEGUIDOR
-			nr.Mux.Unlock()
+			//Cambiar a seguidor, el proceso se hizo cuando se envio al canal
 			return
 		case <-nr.misDatosEstado.candidatoSoyLider:
 			nr.Logger.Printf("HE GANADOOOO LA ELECCION: %d", nr.Yo)
@@ -296,16 +340,13 @@ func (nr *NodoRaft) accionesLider() {
 			enviarLatidosVacios(nr)
 		case <-nr.misDatosEstado.candidatoHayLider:
 			finLider <- true
-			nr.Mux.Lock()
-			nr.misDatosEstado.miEstado = SEGUIDOR
-			nr.Mux.Unlock()
 			return
 		}
 	}
 }
 
 func (nr *NodoRaft) monitorizadorEstadosNodo() {
-	time.Sleep(4100 * time.Millisecond) // SOlo inicio ejecucion para TEST.........
+	time.Sleep(5000 * time.Millisecond) // SOlo inicio ejecucion para TEST.........
 	for {
 		//Necesito leer el estado, y con tanta concurrencia mejor un mutex
 		switch nr.misDatosEstado.miEstado {
@@ -396,6 +437,7 @@ func NuevoNodo(nodos []rpctimeout.HostPort, yo int,
 
 	nr.misDatosEstado.tmrOut = time.NewTimer(0)
 	go nr.monitorizadorEstadosNodo()
+	go nr.aplicarEntradasComprometidas()
 	nr.Logger.Printf("He acabado de ejecutar mi codigo de inicio: %d", nr.Yo)
 	return nr
 }
@@ -457,6 +499,11 @@ func (nr *NodoRaft) someterOperacion(operacion TipoOperacion) (int, int,
 			EntradaRegistro{Operacion: operacion, Mandato: nr.MandatoActual})
 		nr.Mux.Unlock()
 		appendEntriesToAll(nr)
+		result := <-nr.CanalRecibirResultado
+		nr.Logger.Printf("He recibido del canal %d", nr.Yo)
+		valorADevolver = result.Valor
+		//Suponemos que esto esta fuera de raft
+
 		//posible segundo canal de comunicacion para obtener el resultado de
 		//la operacion, en principio el servidor atende clientes de manera
 		//secuencial, en cualquier caso se podría realizar un mapa de canales
@@ -541,7 +588,9 @@ func (nr *NodoRaft) otorgarVoto(peticion *ArgsPeticionVoto,
 	nr.CandidatoVotado = peticion.IdCandidato
 	reply.DecisionVoto = true
 	if nr.misDatosEstado.miEstado != SEGUIDOR {
+		//No enviamos el id de la peticion, porque todavia no es lider
 		nr.misDatosEstado.candidatoHayLider <- true
+		nr.misDatosEstado.miEstado = SEGUIDOR
 		nr.IdLider = IntNOINICIALIZADO
 	}
 	reiniciarTimer(nr.misDatosEstado.tmrOut,
@@ -593,11 +642,13 @@ func mismoMandatoEnUltimoIndice(nr *NodoRaft, args *ArgAppendEntries) bool {
 func actualizarIndiceComprometido(nr *NodoRaft, args *ArgAppendEntries) {
 	if args.UltIndiceComprom > nr.UltimoComprometido {
 		ultimoNuevo := args.UltIndxAnt + len(args.NuevaEntradasReg)
-		minComp := args.UltIndiceComprom
-		if ultimoNuevo < args.UltIndiceComprom { //No ha enviado todos los comp.
-			minComp = ultimoNuevo
+		nuevo := args.UltIndiceComprom
+		if ultimoNuevo < nuevo { //No ha enviado todos los comp.
+			nuevo = ultimoNuevo
 		}
-		nr.UltimoComprometido = minComp
+		if nuevo > nr.UltimoComprometido {
+			nr.UltimoComprometido = nuevo
+		}
 	}
 }
 
@@ -606,8 +657,10 @@ func actualizarInfoLider(nr *NodoRaft, args *ArgAppendEntries) {
 		timerRand(TIMEOUTBASE_LATIDO_MS, RANGO_RAND_LATIDO))
 	if nr.misDatosEstado.miEstado != SEGUIDOR {
 		nr.misDatosEstado.candidatoHayLider <- true
+		nr.misDatosEstado.miEstado = SEGUIDOR
 	}
 	nr.IdLider = args.IdLider
+
 	if nr.MandatoActual != args.MandatoLider {
 		nr.CandidatoVotado = IntNOINICIALIZADO
 	}
@@ -625,6 +678,7 @@ func agnadirEntradas(nr *NodoRaft, args *ArgAppendEntries) {
 			if nr.RegistroOperaciones[indice].Mandato == nueva.Mandato {
 				continue // ya la tengo, no hay nada que hacer
 			}
+			nr.Logger.Printf("Soy %d, y %d me ha pedido ejecutar AppendEntries con nuevas entradas", nr.Yo, args.IdLider)
 			// Conflicto: borro esta entrada y todas las siguientes
 			nr.RegistroOperaciones = nr.RegistroOperaciones[:indice]
 		}
@@ -637,7 +691,6 @@ func agnadirEntradas(nr *NodoRaft, args *ArgAppendEntries) {
 // Metodo de tratamiento de llamadas RPC AppendEntries
 func (nr *NodoRaft) AppendEntries(args *ArgAppendEntries,
 	results *Results) error {
-	nr.Logger.Printf("Soy %d, y %d me ha pedido ejecutar AppendEntries", nr.Yo, args.IdLider)
 	nr.Mux.Lock()
 	if args.MandatoLider < nr.MandatoActual {
 		results.Exito = false
@@ -652,7 +705,6 @@ func (nr *NodoRaft) AppendEntries(args *ArgAppendEntries,
 			agnadirEntradas(nr, args)
 		}
 	}
-	nr.Logger.Printf("Soy %d, y el appendEntries de %d ha tenido exito: %v", nr.Yo, args.IdLider, results.Exito)
 	results.MandatoActual = nr.MandatoActual
 	nr.Mux.Unlock()
 	return nil
@@ -727,7 +779,10 @@ func tratarReplyVoto(nr *NodoRaft, reply *RespuestaPeticionVoto) int {
 		nr.MandatoActual = reply.MandatoActual
 		nr.CandidatoVotado = IntNOINICIALIZADO
 		if nr.misDatosEstado.miEstado != SEGUIDOR {
+			//Si me responden que no puedo ser lider por el mandato, dejo de intentarlo
 			nr.misDatosEstado.candidatoHayLider <- true
+			nr.misDatosEstado.miEstado = SEGUIDOR
+			nr.IdLider = IntNOINICIALIZADO
 		}
 	}
 	nr.Mux.Unlock()
@@ -800,23 +855,38 @@ func constrArgsApndEntr(nr *NodoRaft, nodo int) (args ArgAppendEntries) {
 	return
 }
 
+func comprobarResultadoAppendEntries_fallo(nr *NodoRaft, nodo int,
+	resultado *Results) {
+	if resultado.MandatoActual > nr.MandatoActual {
+		nr.MandatoActual = resultado.MandatoActual
+		nr.CandidatoVotado = IntNOINICIALIZADO
+		//Un seguidor tiene mayor mandato que yo, no se si es el lider
+		nr.misDatosEstado.candidatoHayLider <- true
+		nr.misDatosEstado.miEstado = SEGUIDOR
+		nr.IdLider = IntNOINICIALIZADO
+	} else {
+		nr.infoSeg.SiguienteIdceEnviar_seguidor[nodo] -= 1
+	}
+}
+
+func comprobarResultadoAppendEntries_exito(nr *NodoRaft, nodo int,
+	argumentos *ArgAppendEntries) {
+	indEntAñad := argumentos.UltIndxAnt + len(argumentos.NuevaEntradasReg)
+	if indEntAñad > nr.infoSeg.IdceReplicado_seguidor[nodo] {
+		nr.infoSeg.SiguienteIdceEnviar_seguidor[nodo] = indEntAñad + 1
+		nr.infoSeg.IdceReplicado_seguidor[nodo] = indEntAñad
+	}
+}
+
 func comprobarResultadoAppendEntries(nr *NodoRaft, nodo int,
 	argumentos *ArgAppendEntries, resultado *Results) {
 	nr.Mux.Lock()
-	if nr.misDatosEstado.miEstado == LIDER {
+	if nr.misDatosEstado.miEstado == LIDER &&
+		nr.MandatoActual == argumentos.MandatoLider {
 		if !resultado.Exito {
-			if resultado.MandatoActual > nr.MandatoActual {
-				nr.MandatoActual = resultado.MandatoActual
-				nr.CandidatoVotado = IntNOINICIALIZADO
-				nr.misDatosEstado.miEstado = SEGUIDOR
-				nr.misDatosEstado.candidatoHayLider <- true
-			} else {
-				nr.infoSeg.SiguienteIdceEnviar_seguidor[nodo] -= 1
-			}
+			comprobarResultadoAppendEntries_fallo(nr, nodo, resultado)
 		} else {
-			entAñad := argumentos.UltIndxAnt + len(argumentos.NuevaEntradasReg)
-			nr.infoSeg.SiguienteIdceEnviar_seguidor[nodo] = entAñad + 1
-			nr.infoSeg.IdceReplicado_seguidor[nodo] = entAñad
+			comprobarResultadoAppendEntries_exito(nr, nodo, argumentos)
 		}
 	}
 	nr.Mux.Unlock()

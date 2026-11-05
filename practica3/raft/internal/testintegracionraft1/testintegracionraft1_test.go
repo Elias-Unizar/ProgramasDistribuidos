@@ -6,7 +6,7 @@ import (
 
 	//"log"
 	//"crypto/rand"
-	"os"
+
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -18,23 +18,24 @@ import (
 )
 
 const (
-	//hosts
-	// MAQUINA1 = "127.0.0.1"
-	// MAQUINA2 = "127.0.0.1"
-	// MAQUINA3 = "127.0.0.1"
-
-	// PUERTOREPLICA1 = "29151"
-	// PUERTOREPLICA2 = "29152"
-	// PUERTOREPLICA3 = "29153"
 	// hosts
 	MAQUINA1 = "192.168.3.1"
 	MAQUINA2 = "192.168.3.2"
 	MAQUINA3 = "192.168.3.3"
 
 	//puertos
-	PUERTOREPLICA1 = "29151"
-	PUERTOREPLICA2 = "29152"
-	PUERTOREPLICA3 = "29153"
+	PUERTOREPLICA1 = "29150"
+	PUERTOREPLICA2 = "29150"
+	PUERTOREPLICA3 = "29150"
+	// // hosts
+	// MAQUINA1 = "192.168.3.17"
+	// MAQUINA2 = "192.168.3.18"
+	// MAQUINA3 = "192.168.3.20"
+
+	// //puertos
+	// PUERTOREPLICA1 = "29140"
+	// PUERTOREPLICA2 = "29140"
+	// PUERTOREPLICA3 = "29140"
 
 	//nodos replicas
 	REPLICA1 = MAQUINA1 + ":" + PUERTOREPLICA1
@@ -54,7 +55,8 @@ const (
 )
 
 // PATH de los ejecutables de modulo golang de servicio Raft
-var PATH string = filepath.Join(os.Getenv("HOME"), "sd", "practica3", "raft")
+// var PATH string = filepath.Join(os.Getenv("HOME"), "sd", "practica3", "raft")
+var PATH string = filepath.Join("/misc", "alumnos", "sd", "sd2627", "a927656", "practica3", "raft")
 
 // go run cmd/srvraft/main.go 0 127.0.0.1:29001 127.0.0.1:29002 127.0.0.1:29003
 var EXECREPLICACMD string = "cd " + PATH + "; go run " + EXECREPLICA
@@ -71,7 +73,6 @@ func TestPrimerasPruebas(t *testing.T) { // (m *testing.M) {
 	// tear down code
 	// eliminar procesos en máquinas remotas
 	defer cfg.stop()
-
 	// Run test sequence
 
 	// Test1 : No debería haber ningun primario, si SV no ha recibido aún latidos
@@ -196,6 +197,8 @@ func (cfg *configDespliegue) elegirPrimerLiderTest2(t *testing.T) {
 
 	fmt.Println(t.Name(), ".....................")
 
+	cfg.t = t
+
 	cfg.startDistributedProcesses()
 
 	// Se ha elegido lider ?
@@ -213,6 +216,8 @@ func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
 	//t.Skip("SKIPPED FalloAnteriorElegirNuevoLiderTest3")
 
 	fmt.Println(t.Name(), ".....................")
+
+	cfg.t = t
 
 	cfg.startDistributedProcesses()
 
@@ -234,15 +239,21 @@ func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
 // 3 operaciones comprometidas con situacion estable y sin fallos - 3 NODOS RAFT
 func (cfg *configDespliegue) tresOperacionesComprometidasEstable(t *testing.T) {
 	//t.Skip("SKIPPED tresOperacionesComprometidasEstable")
-
+	op1 := raft.TipoOperacion{Operacion: "leer", Clave: "test1", Valor: ""}
+	op2 := raft.TipoOperacion{Operacion: "escribir", Clave: "test1", Valor: "FUNCIONA"}
+	op3 := raft.TipoOperacion{Operacion: "leer", Clave: "test1", Valor: ""}
 	fmt.Println(t.Name(), ".....................")
+
+	cfg.t = t
 
 	cfg.startDistributedProcesses()
 
 	fmt.Printf("Lider inicial\n")
 	liderAct := cfg.pruebaUnLider(3)
-	cfg.someterNuevaOperacion(raft.TipoOperacion{}, liderAct, 3, "")
-	// A completar ???
+	cfg.someterNuevaOperacion(op1, liderAct, 3, "")
+	cfg.someterNuevaOperacion(op2, liderAct, 3, "FUNCIONA")
+	cfg.someterNuevaOperacion(op3, liderAct, 3, "FUNCIONA")
+
 }
 
 // Se consigue acuerdo a pesar de desconexiones de seguidor -- 3 NODOS RAFT
@@ -346,11 +357,31 @@ func (cfg *configDespliegue) desconectarLider(numreplicas int) {
 	cfg.conectados[nodoLider] = false
 }
 
+func (cfg *configDespliegue) desConectarNodo(numR int, conectado bool, nodo int) {
+	if nodo < numR {
+		if conectado && cfg.conectados[nodo] == false {
+			despliegue.ExecMutipleHosts(EXECREPLICACMD+
+				" "+strconv.Itoa(nodo)+" "+
+				rpctimeout.HostPortArrayToString(cfg.nodosRaft),
+				[]string{string(cfg.nodosRaft[nodo].Host())}, cfg.cr, PRIVKEYFILE)
+		} else if !conectado && cfg.conectados[nodo] == true {
+			var reply raft.Vacio
+			err := cfg.nodosRaft[nodo].CallTimeout("NodoRaft.ParaNodo",
+				raft.Vacio{}, &reply, 10*time.Millisecond)
+			check.CheckError(err, "Error en llamada RPC ParaNodo")
+			cfg.conectados[nodo] = false
+		} else {
+			fmt.Printf("No se puede conectar(%v) el nodo %d, está encendido(%v)", conectado,
+				nodo, cfg.conectados[nodo])
+		}
+	}
+}
+
 func (cfg *configDespliegue) obtenerEstadoRemoto(
 	indiceNodo int) (int, int, bool, int) {
 	var reply raft.EstadoRemoto
 	err := cfg.nodosRaft[indiceNodo].CallTimeout("NodoRaft.ObtenerEstadoNodo",
-		raft.Vacio{}, &reply, 10*time.Millisecond)
+		raft.Vacio{}, &reply, 20*time.Millisecond)
 	check.CheckError(err, "Error en llamada RPC ObtenerEstadoRemoto")
 
 	return reply.IdNodo, reply.Mandato, reply.EsLider, reply.IdLider
@@ -361,16 +392,16 @@ func (cfg *configDespliegue) someterNuevaOperacion(op raft.TipoOperacion,
 	var reply raft.ResultadoRemoto
 	for !reply.EsLider && numreplicas > 0 {
 		err := cfg.nodosRaft[lider].CallTimeout("NodoRaft.SometerOperacionRaft",
-			op, &reply, 10*time.Millisecond)
+			op, &reply, 3000*time.Millisecond)
 		check.CheckError(err, "Error en llamada RPC SometerOperacionRaft")
 		lider = reply.IdLider
 		numreplicas -= 1
 	}
 	if !reply.EsLider || reply.ValorADevolver != resultadoEsperado {
-		cfg.t.Fatalf("Operacion %v ha devuelto: %s en un indice de registro %d\n",
-			"He podido contactar con el lider: esLider=%v  en subtest %s",
-			op, reply.ValorADevolver, reply.IndiceRegistro,
-			reply.EsLider, cfg.t.Name())
+		cfg.t.Fatalf("Operacion %v ha devuelto: %s en un indice de registro"+
+			"%d\n He podido contactar con el lider: esLider=%v  en subtest %s",
+			op, reply.ValorADevolver, reply.IndiceRegistro, reply.EsLider,
+			cfg.t.Name())
 	}
 }
 
@@ -390,7 +421,8 @@ func (cfg *configDespliegue) startDistributedProcesses() {
 	}
 
 	// aproximadamente 500 ms para cada arranque por ssh en portatil
-	time.Sleep(4100 * time.Millisecond) //Por los prints, hay una diferencia de casi 10-40ms y el sleep de dentro de los nodos
+	//Lo de arriba miente....A mi me tarda demasiado
+	time.Sleep(3000 * time.Millisecond)
 }
 
 func (cfg *configDespliegue) stopDistributedProcesses() {

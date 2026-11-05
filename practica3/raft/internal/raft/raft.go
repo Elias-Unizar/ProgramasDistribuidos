@@ -65,7 +65,7 @@ const (
 
 	//  false deshabilita por completo los logs de depuracion
 	// Aseguraros de poner kEnableDebugLogs a false antes de la entrega
-	kEnableDebugLogs = true
+	kEnableDebugLogs = false
 
 	// Poner a true para logear a stdout en lugar de a fichero
 	kLogToStdout = false

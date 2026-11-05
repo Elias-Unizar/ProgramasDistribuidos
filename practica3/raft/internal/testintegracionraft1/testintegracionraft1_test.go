@@ -411,6 +411,7 @@ func (cfg *configDespliegue) startDistributedProcesses() {
 	//cfg.t.Log("Before starting following distributed processes: ", cfg.nodosRaft)
 
 	for i, endPoint := range cfg.nodosRaft {
+		cfg.conectados[i] = true
 		despliegue.ExecMutipleHosts(EXECREPLICACMD+
 			" "+strconv.Itoa(i)+" "+
 			rpctimeout.HostPortArrayToString(cfg.nodosRaft),

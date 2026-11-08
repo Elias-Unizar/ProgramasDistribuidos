@@ -189,6 +189,7 @@ func (cfg *configDespliegue) soloArranqueYparadaTest1(t *testing.T) {
 	cfg.stopDistributedProcesses()
 
 	fmt.Println(".............", t.Name(), "Superado")
+
 }
 
 // Primer lider en marcha - 3 NODOS RAFT
@@ -239,6 +240,7 @@ func (cfg *configDespliegue) falloAnteriorElegirNuevoLiderTest3(t *testing.T) {
 // 3 operaciones comprometidas con situacion estable y sin fallos - 3 NODOS RAFT
 func (cfg *configDespliegue) tresOperacionesComprometidasEstable(t *testing.T) {
 	//t.Skip("SKIPPED tresOperacionesComprometidasEstable")
+
 	op1 := raft.TipoOperacion{Operacion: "leer", Clave: "test1", Valor: ""}
 	op2 := raft.TipoOperacion{Operacion: "escribir", Clave: "test1", Valor: "FUNCIONA"}
 	op3 := raft.TipoOperacion{Operacion: "leer", Clave: "test1", Valor: ""}
@@ -392,7 +394,7 @@ func (cfg *configDespliegue) someterNuevaOperacion(op raft.TipoOperacion,
 	var reply raft.ResultadoRemoto
 	for !reply.EsLider && numreplicas > 0 {
 		err := cfg.nodosRaft[lider].CallTimeout("NodoRaft.SometerOperacionRaft",
-			op, &reply, 3000*time.Millisecond)
+			op, &reply, 1000*time.Millisecond)
 		check.CheckError(err, "Error en llamada RPC SometerOperacionRaft")
 		lider = reply.IdLider
 		numreplicas -= 1
@@ -423,7 +425,7 @@ func (cfg *configDespliegue) startDistributedProcesses() {
 
 	// aproximadamente 500 ms para cada arranque por ssh en portatil
 	//Lo de arriba miente....A mi me tarda demasiado
-	time.Sleep(3000 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 }
 
 func (cfg *configDespliegue) stopDistributedProcesses() {
@@ -443,7 +445,7 @@ func (cfg *configDespliegue) comprobarEstadoRemoto(idNodoDeseado int,
 	mandatoDeseado int, esLiderDeseado bool, IdLiderDeseado int) {
 	idNodo, mandato, esLider, idLider := cfg.obtenerEstadoRemoto(idNodoDeseado)
 
-	//cfg.t.Log("Estado replica 0: ", idNodo, mandato, esLider, idLider, "\n")
+	cfg.t.Log("Estado replica 0: ", idNodo, mandato, esLider, idLider, "\n")
 
 	if idNodo != idNodoDeseado || mandato != mandatoDeseado ||
 		esLider != esLiderDeseado || idLider != IdLiderDeseado {

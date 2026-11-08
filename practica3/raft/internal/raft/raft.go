@@ -65,7 +65,7 @@ const (
 
 	//  false deshabilita por completo los logs de depuracion
 	// Aseguraros de poner kEnableDebugLogs a false antes de la entrega
-	kEnableDebugLogs = false
+	kEnableDebugLogs = true
 
 	// Poner a true para logear a stdout en lugar de a fichero
 	kLogToStdout = false
@@ -346,7 +346,7 @@ func (nr *NodoRaft) accionesLider() {
 }
 
 func (nr *NodoRaft) monitorizadorEstadosNodo() {
-	time.Sleep(5000 * time.Millisecond) // SOlo inicio ejecucion para TEST.........
+	time.Sleep(4000 * time.Millisecond) // SOlo inicio ejecucion para TEST.........
 	for {
 		//Necesito leer el estado, y con tanta concurrencia mejor un mutex
 		switch nr.misDatosEstado.miEstado {
